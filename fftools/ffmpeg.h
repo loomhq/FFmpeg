@@ -423,6 +423,10 @@ typedef struct InputFile {
     int joined;                 /* the thread has been joined */
     int thread_queue_size;      /* maximum number of queued packets */
 #endif
+
+    // A value added to inbound timestamps to prevent them from going "backward" in cases such as HLS discontinuities
+    int64_t ff_timestamp_monotonicity_offset;
+
 } InputFile;
 
 enum forced_keyframes_const {
@@ -597,6 +601,9 @@ extern char *sdp_filename;
 extern float audio_drift_threshold;
 extern float dts_delta_threshold;
 extern float dts_error_threshold;
+
+extern int dts_monotonicity_threshold;
+extern int force_dts_monotonicity;
 
 extern int audio_volume;
 extern int audio_sync_method;
