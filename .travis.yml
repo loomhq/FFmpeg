@@ -2,7 +2,6 @@ language: c
 sudo: false
 os:
   - linux
-  - osx
 addons:
   apt:
     packages:
@@ -12,6 +11,9 @@ compiler:
   - clang
   - gcc
 matrix:
+    include:
+        - os: osx
+          osx_image: xcode13.2
     exclude:
         - os: osx
           compiler: gcc
