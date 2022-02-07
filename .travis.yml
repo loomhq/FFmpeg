@@ -2,7 +2,6 @@ language: c
 sudo: false
 os:
   - linux
-  - osx
 addons:
   apt:
     packages:
@@ -12,12 +11,12 @@ compiler:
   - clang
   - gcc
 matrix:
-    exclude:
-        - os: osx
-          compiler: gcc
     include:
         - os: osx
           osx_image: xcode13.2
+    exclude:
+        - os: osx
+          compiler: gcc
 cache:
   directories:
     - ffmpeg-samples
