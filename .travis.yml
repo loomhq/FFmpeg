@@ -15,6 +15,9 @@ matrix:
     exclude:
         - os: osx
           compiler: gcc
+    include:
+        - os: osx
+          osx_image: xcode13.2
 cache:
   directories:
     - ffmpeg-samples
