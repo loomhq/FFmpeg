@@ -703,7 +703,7 @@ int av_expr_parse(AVExpr **expr, const char *s,
     *wp++ = 0;
 
     p.class      = &eval_class;
-    p.stack_index=100;
+    p.stack_index=200;
     p.s= w;
     p.const_names = const_names;
     p.funcs1      = funcs1;
