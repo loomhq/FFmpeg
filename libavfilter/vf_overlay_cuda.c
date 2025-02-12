@@ -588,5 +588,6 @@ const AVFilter ff_vf_overlay_cuda = {
     FILTER_OUTPUTS(overlay_cuda_outputs),
     FILTER_SINGLE_PIXFMT(AV_PIX_FMT_CUDA),
     .preinit         = overlay_cuda_framesync_preinit,
+    .flags          = AVFILTER_FLAG_SUPPORT_TIMELINE_INTERNAL,
     .flags_internal  = FF_FILTER_FLAG_HWFRAME_AWARE,
 };
