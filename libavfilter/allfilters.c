@@ -391,6 +391,7 @@ extern const AVFilter ff_vf_overlay_vulkan;
 extern const AVFilter ff_vf_overlay_cuda;
 extern const AVFilter ff_vf_owdenoise;
 extern const AVFilter ff_vf_pad;
+extern const AVFilter ff_vf_pad_npp;
 extern const AVFilter ff_vf_pad_opencl;
 extern const AVFilter ff_vf_palettegen;
 extern const AVFilter ff_vf_paletteuse;
@@ -546,6 +547,8 @@ extern const AVFilter ff_vf_xstack_vaapi;
 extern const AVFilter ff_vf_hstack_qsv;
 extern const AVFilter ff_vf_vstack_qsv;
 extern const AVFilter ff_vf_xstack_qsv;
+extern const AVFilter ff_vf_pad_vaapi;
+extern const AVFilter ff_vf_drawbox_vaapi;
 
 extern const AVFilter ff_vsrc_allrgb;
 extern const AVFilter ff_vsrc_allyuv;
@@ -567,6 +570,7 @@ extern const AVFilter ff_vsrc_openclsrc;
 extern const AVFilter ff_vsrc_qrencodesrc;
 extern const AVFilter ff_vsrc_pal75bars;
 extern const AVFilter ff_vsrc_pal100bars;
+extern const AVFilter ff_vsrc_perlin;
 extern const AVFilter ff_vsrc_rgbtestsrc;
 extern const AVFilter ff_vsrc_sierpinski;
 extern const AVFilter ff_vsrc_smptebars;
@@ -604,9 +608,9 @@ extern const AVFilter ff_avsrc_amovie;
 extern const AVFilter ff_avsrc_movie;
 
 /* those filters are part of public or internal API,
- * they are formatted to not be found by the grep
- * as they are manually added again (due to their 'names'
- * being the same while having different 'types'). */
+* they are formatted to not be found by the grep
+* as they are manually added again (due to their 'names'
+* being the same while having different 'types'). */
 extern  const AVFilter ff_asrc_abuffer;
 extern  const AVFilter ff_vsrc_buffer;
 extern  const AVFilter ff_asink_abuffer;
