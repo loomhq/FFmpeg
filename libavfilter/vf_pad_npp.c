@@ -286,8 +286,8 @@ static int npppad_config_props(AVFilterLink* outlink) {
         uint8_t G = npp_pad_context->rgba_color[1];
         uint8_t B = npp_pad_context->rgba_color[2];
         /* limited-range integer formula - couldn't find an implementation like
-         * this in ffmpegs swscale.c or input.c taken from
-         * https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion. asked
+         * this in ffmpegs swscale.c or input.c. This was taken from
+         * https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion. Asked
          * google Gemini to put the formula together
          */
         int Y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
