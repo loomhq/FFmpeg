@@ -67,8 +67,6 @@ typedef struct NPPPadContext {
     int eval_mode;
 
     int last_out_w, last_out_h; ////< used to evaluate the prior output width and height with the incoming frame. a change in this would require GPU frame context to be reallocated
-
-    AVFrame* own_frame;
 } NPPPadContext;
 // clang-format on
 
@@ -231,22 +229,21 @@ fail:
 }
 
 static int npppad_init(AVFilterContext* ctx) {
-    NPPPadContext* s = ctx->priv;
-
-    s->last_out_w = -1;
-    s->last_out_h = -1;
-
-    s->own_frame = av_frame_alloc();
-    if (!s->own_frame)
-        av_log(ctx, AV_LOG_ERROR, "Failed to allocate AVFrame.\n");
+    NPPPadContext* npp_pad_context = ctx->priv;
+    if (!npp_pad_context) {
+        av_log(ctx, AV_LOG_ERROR, "Failed to allocate NPPPadContext.\n");
         return AVERROR(ENOMEM);
+    }
+
+    npp_pad_context->last_out_w = -1;
+    npp_pad_context->last_out_h = -1;
 
     return 0;
 }
 
 static void npppad_uninit(AVFilterContext* ctx) {
-    NPPPadContext* s = ctx->priv;
-    av_buffer_unref(&s->frames_ctx);
+    NPPPadContext* npp_pad_context = ctx->priv;
+    av_buffer_unref(&npp_pad_context->frames_ctx);
 }
 
 static int npppad_config_props(AVFilterLink* outlink) {
@@ -274,6 +271,18 @@ static int npppad_config_props(AVFilterLink* outlink) {
     }
 
     in_frames_ctx = (AVHWFramesContext*)inl->hw_frames_ctx->data;
+
+    /* Check format */
+    for (int i = 0; i < FF_ARRAY_ELEMS(supported_formats); i++) {
+        if (in_frames_ctx->sw_format == supported_formats[i]) {
+            format_supported = 1;
+            break;
+        }
+    }
+    if (!format_supported) {
+        av_log(ctx, AV_LOG_ERROR, "Unsupported input format.\n");
+        return AVERROR(EINVAL);
+    }
 
     /* evaluate color value */
     switch (in_frames_ctx->sw_format) {
@@ -304,18 +313,6 @@ static int npppad_config_props(AVFilterLink* outlink) {
     default:
         av_log(ctx, AV_LOG_ERROR, "Unsupported format for color fill.\n");
         return AVERROR(ENOSYS);
-    }
-
-    /* Check format */
-    for (int i = 0; i < FF_ARRAY_ELEMS(supported_formats); i++) {
-        if (in_frames_ctx->sw_format == supported_formats[i]) {
-            format_supported = 1;
-            break;
-        }
-    }
-    if (!format_supported) {
-        av_log(ctx, AV_LOG_ERROR, "Unsupported input format.\n");
-        return AVERROR(EINVAL);
     }
 
     /* Create output frame context */
