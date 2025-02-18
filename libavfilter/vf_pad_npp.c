@@ -124,7 +124,8 @@ static int eval_expr(AVFilterContext* ctx) {
     var_values[VAR_VSUB] = 1 << desc->log2_chroma_h;
 
     /* evaluate width */
-    if ((ret = av_expr_parse_and_eval(&res, (expr = s->w_expr), var_names,
+    expr = s->w_expr;
+    if ((ret = av_expr_parse_and_eval(&res, expr, var_names,
                                       var_values, NULL, NULL, NULL, NULL, NULL,
                                       0, ctx)) < 0)
         goto fail;
@@ -139,8 +140,8 @@ static int eval_expr(AVFilterContext* ctx) {
     var_values[VAR_OUT_W] = var_values[VAR_OW] = s->w;
 
     /* evaluate height */
-    ret = av_expr_parse_and_eval(&res, (expr = s->h_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
-    if (ret < 0)
+    expr = s->h_expr;
+    if ((ret = av_expr_parse_and_eval(&res, expr, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
         goto fail;
 
     s->h = res;
@@ -155,10 +156,9 @@ static int eval_expr(AVFilterContext* ctx) {
         s->h = s->in_h;
     var_values[VAR_OUT_H] = var_values[VAR_OH] = s->h;
 
-    /* evaluate the width again, as it may depend on the evaluated output height
-     */
-    ret = av_expr_parse_and_eval(&res, (expr = s->w_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
-    if (ret < 0)
+    /* evaluate the width again, as it may depend on the evaluated output height */
+    expr = s->w_expr;
+    if ((ret = av_expr_parse_and_eval(&res, expr, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
         goto fail;
 
     s->w = res;
@@ -172,8 +172,8 @@ static int eval_expr(AVFilterContext* ctx) {
     var_values[VAR_OUT_W] = var_values[VAR_OW] = s->w;
 
     /* Evaluate x */
-    ret = av_expr_parse_and_eval(&res, (expr = s->x_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
-    if (ret < 0)
+    expr = s->x_expr;
+    if ((ret = av_expr_parse_and_eval(&res, expr, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
         goto fail;
 
     s->x = res;
@@ -184,8 +184,8 @@ static int eval_expr(AVFilterContext* ctx) {
     }
 
     /* Evaluate y */
-    ret = av_expr_parse_and_eval(&res, (expr = s->y_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
-    if (ret < 0)
+    expr = s->y_expr;
+    if ((ret = av_expr_parse_and_eval(&res, (expr = s->y_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
         goto fail;
 
     s->y = res;
