@@ -139,9 +139,8 @@ static int eval_expr(AVFilterContext* ctx) {
     var_values[VAR_OUT_W] = var_values[VAR_OW] = s->w;
 
     /* evaluate height */
-    if ((ret = av_expr_parse_and_eval(&res, (expr = s->h_expr), var_names,
-                                      var_values, NULL, NULL, NULL, NULL, NULL,
-                                      0, ctx)) < 0)
+    ret = av_expr_parse_and_eval(&res, (expr = s->h_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
+    if (ret < 0)
         goto fail;
 
     s->h = res;
@@ -158,9 +157,8 @@ static int eval_expr(AVFilterContext* ctx) {
 
     /* evaluate the width again, as it may depend on the evaluated output height
      */
-    if ((ret = av_expr_parse_and_eval(&res, (expr = s->w_expr), var_names,
-                                      var_values, NULL, NULL, NULL, NULL, NULL,
-                                      0, ctx)) < 0)
+    ret = av_expr_parse_and_eval(&res, (expr = s->w_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
+    if (ret < 0)
         goto fail;
 
     s->w = res;
@@ -174,9 +172,8 @@ static int eval_expr(AVFilterContext* ctx) {
     var_values[VAR_OUT_W] = var_values[VAR_OW] = s->w;
 
     /* Evaluate x */
-    if ((ret = av_expr_parse_and_eval(&res, (expr = s->x_expr), var_names,
-                                      var_values, NULL, NULL, NULL, NULL, NULL,
-                                      0, ctx)) < 0)
+    ret = av_expr_parse_and_eval(&res, (expr = s->x_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
+    if (ret < 0)
         goto fail;
 
     s->x = res;
@@ -187,9 +184,8 @@ static int eval_expr(AVFilterContext* ctx) {
     }
 
     /* Evaluate y */
-    if ((ret = av_expr_parse_and_eval(&res, (expr = s->y_expr), var_names,
-                                      var_values, NULL, NULL, NULL, NULL, NULL,
-                                      0, ctx)) < 0)
+    ret = av_expr_parse_and_eval(&res, (expr = s->y_expr), var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx);
+    if (ret < 0)
         goto fail;
 
     s->y = res;
@@ -242,6 +238,7 @@ static int npppad_init(AVFilterContext* ctx) {
 
     s->own_frame = av_frame_alloc();
     if (!s->own_frame)
+        av_log(ctx, AV_LOG_ERROR, "Failed to allocate AVFrame.\n");
         return AVERROR(ENOMEM);
 
     return 0;
@@ -484,19 +481,19 @@ static int npppad_filter_frame(AVFilterLink* inlink, AVFrame* in) {
         }
     }
 
+    /* passthrough if possible (no border requested) */
+    if (npp_pad_context->x == 0 && npp_pad_context->y == 0 &&
+        npp_pad_context->w == in->width &&
+        npp_pad_context->h == in->height) {
+        av_log(ctx, AV_LOG_DEBUG, "No border => pass frame unmodified.\n");
+        npp_pad_context->last_out_w = npp_pad_context->w;
+        npp_pad_context->last_out_h = npp_pad_context->h;
+        return ff_filter_frame(outlink, in);
+    }
+
     /* if width or height has changed re-initialize context */
     if (npp_pad_context->w != npp_pad_context->last_out_w ||
         npp_pad_context->h != npp_pad_context->last_out_h) {
-        /* passthrough if possible (no border requested) */
-        if (npp_pad_context->x == 0 && npp_pad_context->y == 0 &&
-            npp_pad_context->w == in->width &&
-            npp_pad_context->h == in->height) {
-            av_log(ctx, AV_LOG_DEBUG, "No border => pass frame unmodified.\n");
-            npp_pad_context->last_out_w = npp_pad_context->w;
-            npp_pad_context->last_out_h = npp_pad_context->h;
-            return ff_filter_frame(outlink, in);
-        }
-
         /* re allocate frame context */
         av_buffer_unref(&npp_pad_context->frames_ctx);
 
@@ -538,6 +535,7 @@ static int npppad_filter_frame(AVFilterLink* inlink, AVFrame* in) {
         outl->hw_frames_ctx = av_buffer_ref(npp_pad_context->frames_ctx);
         if (!outl->hw_frames_ctx) {
             av_frame_free(&in);
+            av_log(ctx, AV_LOG_ERROR, "Failed to allocate HW AVBuffer.\n");
             return AVERROR(ENOMEM);
         }
         outlink->w = npp_pad_context->w;
@@ -551,6 +549,7 @@ static int npppad_filter_frame(AVFilterLink* inlink, AVFrame* in) {
     AVFrame* out = av_frame_alloc();
     if (!out) {
         av_frame_free(&in);
+        av_log(ctx, AV_LOG_ERROR, "Failed to allocate output AVFrame.\n");
         return AVERROR(ENOMEM);
     }
     ret = av_hwframe_get_buffer(outl->hw_frames_ctx, out, 0);
