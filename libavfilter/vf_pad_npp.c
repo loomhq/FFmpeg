@@ -175,11 +175,6 @@ static int eval_expr(AVFilterContext* ctx) {
         goto fail;
 
     s->x = res;
-    if (s->x < 0) {
-        av_log(ctx, AV_LOG_ERROR, "X expression => negative.\n");
-        ret = AVERROR(EINVAL);
-        goto fail;
-    }
 
     /* Evaluate y */
     expr = s->y_expr;
@@ -187,24 +182,17 @@ static int eval_expr(AVFilterContext* ctx) {
         goto fail;
 
     s->y = res;
-    if (s->y < 0) {
-        av_log(ctx, AV_LOG_ERROR, "Y expression => negative.\n");
-        ret = AVERROR(EINVAL);
-        goto fail;
+
+    /* center x if needed */
+    if (s->x < 0 || s->x + s->in_w > s->w) {
+        s->x = (s->w - s->in_w) / 2;
+        av_log(ctx, AV_LOG_INFO, "Centering X offset.\n");
     }
 
-    /* clamp if needed - this way if a user passes in an invalid x and w we can
-     * warn and proceed */
-    if (s->x + s->in_w > s->w) {
-        av_log(ctx, AV_LOG_WARNING, "X offset too large, clamping.\n");
-        s->x = s->w - s->in_w;
-    }
-
-    /* clamp if needed - this way if a user passes in an invalid y and h we can
-     * warn and continue */
-    if (s->y + s->in_h > s->h) {
-        av_log(ctx, AV_LOG_WARNING, "Y offset too large, clamping.\n");
-        s->y = s->h - s->in_h;
+    /* center y if needed */
+    if (s->y < 0 || s->y + s->in_h > s->h) {
+        s->y = (s->h - s->in_h) / 2;
+        av_log(ctx, AV_LOG_INFO, "Centering Y offset.\n");
     }
 
     s->w = av_clip(s->w, 1, INT_MAX);
@@ -226,6 +214,38 @@ static int eval_expr(AVFilterContext* ctx) {
 fail:
     av_log(ctx, AV_LOG_ERROR, "Error evaluating '%s'\n", expr);
     return ret;
+}
+
+static int npppad_alloc_out_frames_ctx(AVFilterContext *ctx, AVBufferRef **out_frames_ctx, const int width, const int height)
+{
+    AVFilterLink *inlink = ctx->inputs[0];
+    FilterLink* inl = ff_filter_link(inlink);
+    AVHWFramesContext *in_frames_ctx = (AVHWFramesContext*)inl->hw_frames_ctx->data;
+    int ret;
+
+    *out_frames_ctx = av_hwframe_ctx_alloc(in_frames_ctx->device_ref);
+    if (!*out_frames_ctx) {
+        return AVERROR(ENOMEM);
+    }
+
+    AVHWFramesContext *out_fc = (AVHWFramesContext*)(*out_frames_ctx)->data;
+    out_fc->format    = AV_PIX_FMT_CUDA;
+    out_fc->sw_format = in_frames_ctx->sw_format;
+    /* CUDA/NPP work best with 32-pixel alignment. Existing CUDA/CPP
+   * filters do the same prior to calling GPU specific functions;
+   * see vf_sharpen_npp.c */
+    out_fc->width     = FFALIGN(width, 32);
+    out_fc->height    = FFALIGN(height, 32);
+
+    ret = av_hwframe_ctx_init(*out_frames_ctx);
+    if (ret < 0) {
+        av_log(ctx, AV_LOG_ERROR, "Failed to init output hwframes ctx: %s\n",
+               av_err2str(ret));
+        av_buffer_unref(out_frames_ctx);
+        return ret;
+    }
+
+    return 0;
 }
 
 static int npppad_init(AVFilterContext* ctx) {
@@ -316,31 +336,9 @@ static int npppad_config_props(AVFilterLink* outlink) {
     }
 
     /* Create output frame context */
-    npp_pad_context->frames_ctx =
-        av_hwframe_ctx_alloc(in_frames_ctx->device_ref);
-    if (!npp_pad_context->frames_ctx)
-        return AVERROR(ENOMEM);
-
-    /* limiting scope of re-defined output frame context */
-    {
-        AVHWFramesContext* out_frames_ctx =
-            (AVHWFramesContext*)npp_pad_context->frames_ctx->data;
-        out_frames_ctx->format = AV_PIX_FMT_CUDA;
-        out_frames_ctx->sw_format = in_frames_ctx->sw_format;
-
-        out_frames_ctx->width = npp_pad_context->w;
-        out_frames_ctx->height = npp_pad_context->h;
-
-        out_frames_ctx->initial_pool_size = 0;
-    }
-
-    ret = av_hwframe_ctx_init(npp_pad_context->frames_ctx);
-    if (ret < 0) {
-        av_log(ctx, AV_LOG_ERROR, "Failed to init output hwframes ctx: %s\n",
-               av_err2str(ret));
-        av_buffer_unref(&npp_pad_context->frames_ctx);
+    ret = npppad_alloc_out_frames_ctx(ctx, &npp_pad_context->frames_ctx, npp_pad_context->w, npp_pad_context->h);
+    if (ret < 0)
         return ret;
-    }
 
     /* set outlink context and assign GPU frame context */
     {
@@ -491,41 +489,13 @@ static int npppad_filter_frame(AVFilterLink* inlink, AVFrame* in) {
     /* if width or height has changed re-initialize context */
     if (npp_pad_context->w != npp_pad_context->last_out_w ||
         npp_pad_context->h != npp_pad_context->last_out_h) {
+
         /* re allocate frame context */
         av_buffer_unref(&npp_pad_context->frames_ctx);
 
-        {
-            FilterLink* reinit_inl = ff_filter_link(inlink);
-            AVHWFramesContext* in_fc =
-                (AVHWFramesContext*)reinit_inl->hw_frames_ctx->data;
-
-            npp_pad_context->frames_ctx =
-                av_hwframe_ctx_alloc(in_fc->device_ref);
-            if (!npp_pad_context->frames_ctx) {
-                av_frame_free(&in);
-                return AVERROR(ENOMEM);
-            }
-
-            {
-                AVHWFramesContext* out_fc =
-                    (AVHWFramesContext*)npp_pad_context->frames_ctx->data;
-                out_fc->format = AV_PIX_FMT_CUDA;
-                out_fc->sw_format = in_fc->sw_format;
-                /* CUDA/NPP work best with 32-pixel alignment. Existing CUDA/CPP
-                 * filters do the same prior to calling GPU specific functions;
-                 * see vf_sharpen_npp.c */
-                out_fc->width = FFALIGN(npp_pad_context->w, 32);
-                out_fc->height = FFALIGN(npp_pad_context->h, 32);
-            }
-
-            ret = av_hwframe_ctx_init(npp_pad_context->frames_ctx);
-            if (ret < 0) {
-                av_log(ctx, AV_LOG_ERROR, "Failed to reinit frames_ctx: %s\n",
-                       av_err2str(ret));
-                av_frame_free(&in);
-                return ret;
-            }
-        }
+        ret = npppad_alloc_out_frames_ctx(ctx, &npp_pad_context->frames_ctx, npp_pad_context->w, npp_pad_context->h);
+        if (ret < 0)
+            return ret;
 
         /* update output HW frame context */
         av_buffer_unref(&outl->hw_frames_ctx);
