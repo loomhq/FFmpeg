@@ -243,14 +243,6 @@ static av_cold int mediacodec_init(AVCodecContext *avctx)
          avctx->codec_id == AV_CODEC_ID_HEVC)) {
         s->width = FFALIGN(avctx->width, 16);
         s->height = FFALIGN(avctx->height, 16);
-        // If avctx video size is aligned to 16 already, we don't need to do
-        // anything. If align is needed for HEVC, we should use the maximum CTU
-        // size.
-        if (avctx->codec_id == AV_CODEC_ID_HEVC &&
-            (s->width != avctx->width || s->height != avctx->height)) {
-            s->width = FFALIGN(avctx->width, 64);
-            s->height = FFALIGN(avctx->height, 64);
-        }
     } else {
         s->width = avctx->width;
         s->height = avctx->height;
