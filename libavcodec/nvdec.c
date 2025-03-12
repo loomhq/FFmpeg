@@ -222,6 +222,12 @@ static int nvdec_decoder_create(NVDECDecoder **out, AVBufferRef *hw_device_ref,
         goto fail;
     }
 
+    // Check and limit ulNumDecodeSurfaces
+    if (params->ulNumDecodeSurfaces > 32) {
+        av_log(logctx, AV_LOG_WARNING, "ulNumDecodeSurfaces (%lu) exceeds 32, limiting to 32.\n", params->ulNumDecodeSurfaces);
+        params->ulNumDecodeSurfaces = 32;
+    }
+
     ret = CHECK_CU(decoder->cvdl->cuvidCreateDecoder(&decoder->decoder, params));
 
     CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
