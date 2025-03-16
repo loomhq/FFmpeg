@@ -2017,7 +2017,7 @@ HWACCEL_LIBRARY_NONFREE_LIST="
     cuda_nvcc
     cuda_sdk
     libnpp
-	nvjpeg
+    nvjpeg
 "
 
 HWACCEL_LIBRARY_LIST="
