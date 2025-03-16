@@ -865,6 +865,7 @@ extern const FFCodec ff_hevc_videotoolbox_encoder;
 extern const FFCodec ff_hevc_vulkan_encoder;
 extern const FFCodec ff_libkvazaar_encoder;
 extern const FFCodec ff_mjpeg_cuvid_decoder;
+extern const FFCodec ff_nvjpeg_encoder;
 extern const FFCodec ff_mjpeg_qsv_encoder;
 extern const FFCodec ff_mjpeg_qsv_decoder;
 extern const FFCodec ff_mjpeg_vaapi_encoder;
