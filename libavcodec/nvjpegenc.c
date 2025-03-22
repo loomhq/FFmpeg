@@ -148,15 +148,8 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
     }
 
     // Handle YUV input formats and populate nv_image data
-    if (sw_format == AV_PIX_FMT_YUV420P || sw_format == AV_PIX_FMT_YUVJ420P) {
-        nv_image.channel[0] = frame->data[0];
-        nv_image.pitch[0] = frame->linesize[0];
-        nv_image.channel[1] = frame->data[1];
-        nv_image.pitch[1] = frame->linesize[1];
-        nv_image.channel[2] = frame->data[2];
-        nv_image.pitch[2] = frame->linesize[2];
-    } else if (sw_format == AV_PIX_FMT_YUV444P ||
-               sw_format == AV_PIX_FMT_YUVJ444P) {
+    if (sw_format == AV_PIX_FMT_YUV420P || sw_format == AV_PIX_FMT_YUVJ420P
+        || AV_PIX_FMT_YUV422P || AV_PIX_FMT_YUVJ422P) {
         nv_image.channel[0] = frame->data[0];
         nv_image.pitch[0] = frame->linesize[0];
         nv_image.channel[1] = frame->data[1];
@@ -229,8 +222,13 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
     }
 
     // Retrieve the bitstream again to populate output buffer
-    CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(
+    ret = CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(
         ctx->nvjpeg_handle, ctx->encoder_state, out_buf, &out_buf_size, NULL));
+
+    if (ret < 0) {
+    	av_free(out_buf);
+		return AVERROR_EXTERNAL;
+    }
 
     ret = av_packet_from_data(pkt, out_buf, out_buf_size);
     if (ret < 0) {
