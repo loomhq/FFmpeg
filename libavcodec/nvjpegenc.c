@@ -148,24 +148,19 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
     }
 
     // Handle YUV input formats and populate nv_image data
-    if (sw_format == AV_PIX_FMT_YUV420P || sw_format == AV_PIX_FMT_YUVJ420P
-        || AV_PIX_FMT_YUV422P || AV_PIX_FMT_YUVJ422P) {
+    if (input_format == NVJPEG_INPUT_TYPE_YUV) {
         nv_image.channel[0] = frame->data[0];
         nv_image.pitch[0] = frame->linesize[0];
         nv_image.channel[1] = frame->data[1];
         nv_image.pitch[1] = frame->linesize[1];
         nv_image.channel[2] = frame->data[2];
         nv_image.pitch[2] = frame->linesize[2];
-    } else if (input_format != NVJPEG_INPUT_TYPE_RGB) {
+    } else {
         // Handle BGR/RGB input formats
         for (i = 0; i < NVJPEG_MAX_COMPONENT; i++) {
             nv_image.channel[i] = frame->data[i];
             nv_image.pitch[i] = frame->linesize[i];
         }
-    } else {
-        av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format: %s\n",
-               av_get_pix_fmt_name(sw_format));
-        return AVERROR(EINVAL);
     }
 
     // Handle subsampling if applicable and encode
@@ -222,10 +217,10 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
     }
 
     // Retrieve the bitstream again to populate output buffer
-    ret = CHECK_NVJPEG(nvjpegEncodeRetrieveBitstream(
-        ctx->nvjpeg_handle, ctx->encoder_state, out_buf, &out_buf_size, NULL));
+    ret = nvjpegEncodeRetrieveBitstream(
+        ctx->nvjpeg_handle, ctx->encoder_state, out_buf, &out_buf_size, NULL);
 
-    if (ret < 0) {
+    if (ret != NVJPEG_STATUS_SUCCESS) {
     	av_free(out_buf);
 		return AVERROR_EXTERNAL;
     }
@@ -243,22 +238,31 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
 
 static av_cold int nvjpeg_close(AVCodecContext* avctx) {
     NvjpegContext* ctx = avctx->priv_data;
-
+    int err;
     if (ctx->encoder_state) {
-        CHECK_NVJPEG(nvjpegEncoderStateDestroy(ctx->encoder_state));
+        err = nvjpegEncoderStateDestroy(ctx->encoder_state);
+        if (err != NVJPEG_STATUS_SUCCESS) {
+            av_log(avctx, AV_LOG_ERROR, "nvjpegEncoderStateDestroy failed with error code: %d\n", err);
+        }
     }
-
     if (ctx->encode_params) {
-        CHECK_NVJPEG(nvjpegEncoderParamsDestroy(ctx->encode_params));
+        err = nvjpegEncoderParamsDestroy(ctx->encode_params);
+        if (err != NVJPEG_STATUS_SUCCESS) {
+            av_log(avctx, AV_LOG_ERROR, "nvjpegEncoderParamsDestroy failed with error code: %d\n", err);
+        }
     }
-
-    if (ctx->jpeg_state) {
-        CHECK_NVJPEG(nvjpegJpegStateDestroy(ctx->jpeg_state));
-    }
-
-    if (ctx->nvjpeg_handle) {
-        CHECK_NVJPEG(nvjpegDestroy(ctx->nvjpeg_handle));
-    }
+	if (ctx->jpeg_state) {
+    	err = nvjpegJpegStateDestroy(ctx->jpeg_state);
+    	if (err != NVJPEG_STATUS_SUCCESS) {
+        	av_log(avctx, AV_LOG_ERROR, "nvjpegJpegStateDestroy failed with error code: %d\n", err);
+    	}
+	}
+	if (ctx->nvjpeg_handle) {
+    	err = nvjpegDestroy(ctx->nvjpeg_handle);
+    	if (err != NVJPEG_STATUS_SUCCESS) {
+        	av_log(avctx, AV_LOG_ERROR, "nvjpegDestroy failed with error code: %d\n", err);
+    	}
+	}
     return 0;
 }
 
