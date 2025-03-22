@@ -147,20 +147,11 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
         nv_image.pitch[i] = 0;
     }
 
-    // Handle YUV input formats and populate nv_image data
-    if (input_format == NVJPEG_INPUT_TYPE_YUV) {
-        nv_image.channel[0] = frame->data[0];
-        nv_image.pitch[0] = frame->linesize[0];
-        nv_image.channel[1] = frame->data[1];
-        nv_image.pitch[1] = frame->linesize[1];
-        nv_image.channel[2] = frame->data[2];
-        nv_image.pitch[2] = frame->linesize[2];
-    } else {
-        // Handle BGR/RGB input formats
-        for (i = 0; i < NVJPEG_MAX_COMPONENT; i++) {
-            nv_image.channel[i] = frame->data[i];
-            nv_image.pitch[i] = frame->linesize[i];
-        }
+    // Handle YUV and RGB input formats and populate nv_image data
+    int planes = (input_format == NVJPEG_INPUT_TYPE_YUV) ? 3 : NVJPEG_MAX_COMPONENT;
+    for (i = 0; i < planes; i++) {
+        nv_image.channel[i] = frame->data[i];
+        nv_image.pitch[i] = frame->linesize[i];
     }
 
     // Handle subsampling if applicable and encode
@@ -222,6 +213,7 @@ static int nvjpeg_encode_frame(AVCodecContext* avctx, AVPacket* pkt,
 
     if (ret != NVJPEG_STATUS_SUCCESS) {
     	av_free(out_buf);
+        av_log(avctx, AV_LOG_ERROR, "Failed to populate output buffer\n");
 		return AVERROR_EXTERNAL;
     }
 
