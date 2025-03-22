@@ -352,6 +352,7 @@ External library support:
   --enable-libmfx          enable Intel MediaSDK (AKA Quick Sync Video) code via libmfx [no]
   --enable-libvpl          enable Intel oneVPL code via libvpl if libmfx is not used [no]
   --enable-libnpp          enable Nvidia Performance Primitives-based code [no]
+  --enable-nvjpeg          enable Nvidia nvJPEG Encoder [no]
   --enable-mmal            enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
   --disable-nvdec          disable Nvidia video decoding acceleration (via hwaccel) [autodetect]
   --disable-nvenc          disable Nvidia video encoding code [autodetect]
@@ -2016,6 +2017,7 @@ HWACCEL_LIBRARY_NONFREE_LIST="
     cuda_nvcc
     cuda_sdk
     libnpp
+    nvjpeg
 "
 
 HWACCEL_LIBRARY_LIST="
@@ -3389,6 +3391,7 @@ hevc_v4l2m2m_decoder_deps="v4l2_m2m hevc_v4l2_m2m"
 hevc_v4l2m2m_decoder_select="hevc_mp4toannexb_bsf"
 hevc_v4l2m2m_encoder_deps="v4l2_m2m hevc_v4l2_m2m"
 mjpeg_cuvid_decoder_deps="cuvid"
+nvjpeg_encoder_deps="nvjpeg"
 mjpeg_qsv_decoder_select="qsvdec"
 mjpeg_qsv_encoder_deps="libmfx"
 mjpeg_qsv_encoder_select="qsvenc"
@@ -6957,6 +6960,7 @@ enabled libmysofa         && { check_pkg_config libmysofa libmysofa mysofa.h mys
 enabled libnpp            && { check_lib libnpp npp.h nppGetLibVersion -lnppig -lnppicc -lnppc -lnppidei -lnppif ||
                                check_lib libnpp npp.h nppGetLibVersion -lnppi -lnppif -lnppc -lnppidei ||
                                die "ERROR: libnpp not found"; }
+enabled nvjpeg            && { check_lib nvjpeg nvjpeg.h nvjpegGetProperty -lnvjpeg || die "ERROR: nvjpeg not found"; }
 enabled libopencore_amrnb && require libopencore_amrnb opencore-amrnb/interf_dec.h Decoder_Interface_init -lopencore-amrnb
 enabled libopencore_amrwb && require libopencore_amrwb opencore-amrwb/dec_if.h D_IF_init -lopencore-amrwb
 enabled libopencv         && { check_headers opencv2/core/core_c.h &&
