@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2025 The FFmpeg Project
+ *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -126,34 +128,26 @@ static int nppcrop_eval_expr(AVFilterContext* ctx) {
     var_values[VAR_HSUB]  = 1 << desc->log2_chroma_w;
     var_values[VAR_VSUB]  = 1 << desc->log2_chroma_h;
 
-    expr_str = crop_ctx->w_expr;
-    if ((ret = av_expr_parse_and_eval(&res, expr_str, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
-        goto fail;
-    crop_ctx->w = lrint(res);
-    var_values[VAR_OUT_W] = var_values[VAR_OW] = crop_ctx->w;
+#define PARSE_AND_EVAL_EXPR(ctx, expr, result_var, var_name, var_value_array) \
+    do { \
+        expr_str = expr; \
+        if ((ret = av_expr_parse_and_eval(&res, expr_str, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0) \
+            goto fail; \
+        result_var = lrint(res); \
+        var_value_array = result_var; \
+    } while (0)
 
-    expr_str = crop_ctx->h_expr;
-    if ((ret = av_expr_parse_and_eval(&res, expr_str, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
-        goto fail;
-    crop_ctx->h = lrint(res);
-    var_values[VAR_OUT_H] = var_values[VAR_OH] = crop_ctx->h;
-
+    PARSE_AND_EVAL_EXPR(ctx, crop_ctx->w_expr, crop_ctx->w, VAR_OW, var_values[VAR_OUT_W]);
+    var_values[VAR_OW] = crop_ctx->w;
+    PARSE_AND_EVAL_EXPR(ctx, crop_ctx->h_expr, crop_ctx->h, VAR_OH, var_values[VAR_OUT_H]);
+    var_values[VAR_OH] = crop_ctx->h;
+    
     if (crop_ctx->w <= 0 || crop_ctx->h <= 0) {
         av_log(ctx, AV_LOG_ERROR, "Invalid non-positive crop dimensions w:%d h:%d\n", crop_ctx->w, crop_ctx->h);
         return AVERROR(EINVAL);
     }
-
-    expr_str = crop_ctx->x_expr;
-    if ((ret = av_expr_parse_and_eval(&res, expr_str, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
-        goto fail;
-    crop_ctx->x = lrint(res);
-    var_values[VAR_X] = crop_ctx->x;
-
-    expr_str = crop_ctx->y_expr;
-    if ((ret = av_expr_parse_and_eval(&res, expr_str, var_names, var_values, NULL, NULL, NULL, NULL, NULL, 0, ctx)) < 0)
-        goto fail;
-    crop_ctx->y = lrint(res);
-    var_values[VAR_Y] = crop_ctx->y;
+    PARSE_AND_EVAL_EXPR(ctx, crop_ctx->x_expr, crop_ctx->x, VAR_X, var_values[VAR_X]);
+    PARSE_AND_EVAL_EXPR(ctx, crop_ctx->y_expr, crop_ctx->y, VAR_Y, var_values[VAR_Y]);
 
     // Clamp crop window
     if (crop_ctx->w > crop_ctx->in_w) crop_ctx->w = crop_ctx->in_w;
@@ -222,6 +216,7 @@ static int nppcrop_eval_expr(AVFilterContext* ctx) {
 fail:
     av_log(ctx, AV_LOG_ERROR, "Error evaluating '%s': %s\n", expr_str, av_err2str(ret));
     return ret;
+#undef PARSE_AND_EVAL_EXPR
 }
 
 static int nppcrop_alloc_out_frames_ctx(AVFilterContext *ctx, AVBufferRef **out_frames_ctx_ref, const int width, const int height) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 The FFmpeg Project
+ * Copyright (c) 2025 The FFmpeg Project
  *
  * This file is part of FFmpeg.
  *
@@ -20,7 +20,7 @@
 
 /**
  * @file
- * Copy an alpha component from another video's luma using CUDA.
+ * Copy the luma value of the second input into the alpha channel of the first input using CUDA.
  */
 
 #include "libavutil/opt.h"
@@ -165,9 +165,6 @@ static int query_formats(AVFilterContext *avctx)
     ASSIGN_FORMAT_LIST(&avctx->outputs[0]->incfg.color_ranges, main_io_supported_cr);
 
 end:
-    if (ret < 0) {
-        av_freep(&formats_list);
-    }
     return ret;
 #undef ASSIGN_FORMAT_LIST
 }
@@ -188,8 +185,10 @@ static int do_alphamerge_cuda(FFFrameSync *fs)
 
     // Get synchronized frames from both inputs
     ret = ff_framesync_dualinput_get_writable(fs, &main_frame, &alpha_mask_frame);
-    if (ret < 0)
+    if (ret < 0) {
+        av_log(ctx, AV_LOG_ERROR, "failed to get writable frame from input\n");
         return ret;
+    }
     if (!main_frame)
         return AVERROR_BUG;
 
@@ -201,6 +200,7 @@ static int do_alphamerge_cuda(FFFrameSync *fs)
     // Push the CUDA context
     ret = CHECK_CU(cu->cuCtxPushCurrent(ctx->cu_ctx));
     if (ret < 0) {
+        av_log(ctx, AV_LOG_ERROR, "failed to get push CUDA context\n");
         av_frame_free(&main_frame);
         av_frame_free(&alpha_mask_frame);
         return ret;
@@ -249,10 +249,14 @@ static int do_alphamerge_cuda(FFFrameSync *fs)
     // Pop the CUDA context
     ret = CHECK_CU(cu->cuCtxPopCurrent(&dummy_cu_ctx));
     if (ret < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Failed to pop CUDA context\n");
         av_frame_free(&main_frame);
         av_frame_free(&alpha_mask_frame);
         return ret;
     }
+
+    // alpha_mask_frame is not needed downstream so we can release it
+    av_frame_free(&alpha_mask_frame);
 
     return ff_filter_frame(outlink, main_frame);
 }
@@ -329,7 +333,10 @@ static int alphamerge_cuda_config_output(AVFilterLink *outlink)
     cu = ctx->hwctx->internal->cuda_dl;
 
     ret = CHECK_CU(cu->cuCtxPushCurrent(ctx->cu_ctx));
-    if (ret < 0) return ret;
+    if (ret < 0) {
+        av_log(ctx, AV_LOG_ERROR, "failed to push CUDA context\n");
+        return ret;
+    }
 
     ret = ff_cuda_load_module(avctx, ctx->hwctx, &ctx->cu_module,
                               ff_vf_alphamerge_cuda_ptx_data, ff_vf_alphamerge_cuda_ptx_len);
@@ -372,14 +379,18 @@ static int alphamerge_cuda_config_output(AVFilterLink *outlink)
 
     // Output HW frames context
     outl_fl->hw_frames_ctx = av_buffer_ref(main_inl->hw_frames_ctx);
-    if (!outl_fl->hw_frames_ctx)
+    if (!outl_fl->hw_frames_ctx) {
+        av_log(ctx, AV_LOG_ERROR, "failed to create output AVHWFramesContext\n");
         return AVERROR(ENOMEM);
+    }
 
     // framesync
     ctx->fs.time_base = main_inlink->time_base;
     ret = ff_framesync_init_dualinput(&ctx->fs, avctx);
-    if (ret < 0)
+    if (ret < 0) {
+        av_log(ctx, AV_LOG_ERROR, "failed to initialize dual inputs\n");
         return ret;
+    }
 
     return ff_framesync_configure(&ctx->fs);
 }
