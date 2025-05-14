@@ -23,6 +23,7 @@
  * Copy the luma value of the second input into the alpha channel of the first input using CUDA.
  */
 
+#include "libavutil/internal.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/hwcontext.h"
@@ -34,7 +35,6 @@
 #include "filters.h"
 #include "formats.h"
 #include "framesync.h"
-#include "internal.h"
 #include "video.h"
 
 #include "cuda/load_helper.h"

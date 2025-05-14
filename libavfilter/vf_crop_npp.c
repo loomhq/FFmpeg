@@ -27,7 +27,7 @@
 #include <nppi.h>
 
 #include "filters.h"
-#include "internal.h"
+#include "libavutil/internal.h"
 #include "libavutil/avstring.h"
 #include "libavutil/common.h"
 #include "libavutil/cuda_check.h"
