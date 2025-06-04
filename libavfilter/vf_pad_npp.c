@@ -25,7 +25,7 @@
 #include <nppi.h>
 
 #include "filters.h"
-#include "libavutil/internal.h"
+#include "internal.h"
 #include "libavutil/avstring.h"
 #include "libavutil/common.h"
 #include "libavutil/cuda_check.h"
@@ -42,7 +42,7 @@
 static const enum AVPixelFormat supported_formats[] = {
     AV_PIX_FMT_YUV420P,
     AV_PIX_FMT_YUV444P,
-    AV_PIX_FMT_RGBA,
+    AV_PIX_FMT_NV12,
     AV_PIX_FMT_NONE
 };
 
@@ -305,35 +305,21 @@ static int npppad_config_props(AVFilterLink* outlink) {
     }
 
     /* evaluate color value */
-    switch (in_frames_ctx->sw_format) {
-    case AV_PIX_FMT_YUV420P:
-    case AV_PIX_FMT_YUV444P: {
-        uint8_t R = npp_pad_context->rgba_color[0];
-        uint8_t G = npp_pad_context->rgba_color[1];
-        uint8_t B = npp_pad_context->rgba_color[2];
-        /* limited-range integer formula - couldn't find an implementation like
-         * this in ffmpegs swscale.c or input.c. This was taken from
-         * https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion. Asked
-         * google Gemini to put the formula together
-         */
-        int Y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
-        int U = ((-38 * R - 74 * G + 112 * B + 128) >> 8) + 128;
-        int V = ((112 * R - 94 * G - 18 * B + 128) >> 8) + 128;
-        npp_pad_context->parsed_color[0] = av_clip_uint8(Y);
-        npp_pad_context->parsed_color[1] = av_clip_uint8(U);
-        npp_pad_context->parsed_color[2] = av_clip_uint8(V);
-        npp_pad_context->parsed_color[3] = 255;
-    } break;
-    case AV_PIX_FMT_RGBA: {
-        npp_pad_context->parsed_color[0] = npp_pad_context->rgba_color[0];
-        npp_pad_context->parsed_color[1] = npp_pad_context->rgba_color[1];
-        npp_pad_context->parsed_color[2] = npp_pad_context->rgba_color[2];
-        npp_pad_context->parsed_color[3] = npp_pad_context->rgba_color[3];
-    } break;
-    default:
-        av_log(ctx, AV_LOG_ERROR, "Unsupported format for color fill.\n");
-        return AVERROR(ENOSYS);
-    }
+    uint8_t R = npp_pad_context->rgba_color[0];
+    uint8_t G = npp_pad_context->rgba_color[1];
+    uint8_t B = npp_pad_context->rgba_color[2];
+    /* limited-range integer formula - couldn't find an implementation like
+     * this in ffmpegs swscale.c or input.c. This was taken from
+     * https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion. Asked
+     * google Gemini to put the formula together
+     */
+    int Y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
+    int U = ((-38 * R - 74 * G + 112 * B + 128) >> 8) + 128;
+    int V = ((112 * R - 94 * G - 18 * B + 128) >> 8) + 128;
+    npp_pad_context->parsed_color[0] = av_clip_uint8(Y);
+    npp_pad_context->parsed_color[1] = av_clip_uint8(U);
+    npp_pad_context->parsed_color[2] = av_clip_uint8(V);
+    npp_pad_context->parsed_color[3] = npp_pad_context->rgba_color[3]; // Keep alpha from input color
 
     /* Create output frame context */
     ret = npppad_alloc_out_frames_ctx(ctx, &npp_pad_context->frames_ctx, npp_pad_context->w, npp_pad_context->h);
@@ -380,8 +366,14 @@ static int npppad_pad(AVFilterContext* ctx, AVFrame* out, const AVFrame* in) {
         int hsub = (plane == 1 || plane == 2) ? desc_in->log2_chroma_w : 0;
         int vsub = (plane == 1 || plane == 2) ? desc_in->log2_chroma_h : 0;
 
-        /*  values we need to calculate for nppiCopyConstBorder_8u_C1R and
-         * nppiCopyConstBorder_8u_C4R
+        // NV12 UV plane subsampling
+        if (in_frames_ctx->sw_format == AV_PIX_FMT_NV12 && plane == 1) {
+            // Both should be 1 for NV12
+            hsub = desc_in->log2_chroma_w;
+            vsub = desc_in->log2_chroma_h;
+        }
+
+        /*  values we need to calculate for nppiCopyConstBorder_8u_C1R
          * https://docs.nvidia.com/cuda/npp/image_data_exchange_and_initialization.html#group__image__copy__constant__border_1image_copy_constant_border
          */
 
@@ -394,31 +386,68 @@ static int npppad_pad(AVFilterContext* ctx, AVFrame* out, const AVFrame* in) {
         int dstH = AV_CEIL_RSHIFT(npp_pad_context->h, vsub);
 
         /* x and y offset */
-        int y_plane = AV_CEIL_RSHIFT(npp_pad_context->y, vsub);
-        int x_plane = AV_CEIL_RSHIFT(npp_pad_context->x, hsub);
+        int y_plane_offset = AV_CEIL_RSHIFT(npp_pad_context->y, vsub);
+        int x_plane_offset = AV_CEIL_RSHIFT(npp_pad_context->x, hsub);
 
         /* sanity check boundaries */
-        if (x_plane + srcW > dstW || y_plane + srcH > dstH) {
+        if (x_plane_offset + srcW > dstW || y_plane_offset + srcH > dstH) {
             av_log(ctx, AV_LOG_ERROR,
                    "ROI out of bounds in plane %d: offset=(%d,%d) in=(%dx%d) "
                    "out=(%dx%d)\n",
-                   plane, x_plane, y_plane, srcW, srcH, dstW, dstH);
+                   plane, x_plane_offset, y_plane_offset, srcW, srcH, dstW, dstH);
             return AVERROR(EINVAL);
         }
 
-        NppiSize oSrcSizeROI = { srcW, srcH };
-        NppiSize oDstSizeROI = { dstW, dstH };
-
         NppStatus st;
 
-        /* YUV (RGBA has a single plane) */
-        if (nb_planes > 1) {
+        // UV plane (NV12)
+        // There is no nppiCopyConstBorder function that can handle a UV pair so instead
+        // we have to create the color plane with nppiSet_8u_C2R and then copy over the existing UV plane to our newly created plane
+        if (in_frames_ctx->sw_format == AV_PIX_FMT_NV12 && plane == 1) {
+            // srcW/dstW are in UV-pair counts for this plane. x_plane_offset is also in UV-pairs.
+            Npp8u fillValUV[2] = {npp_pad_context->parsed_color[1], npp_pad_context->parsed_color[2]}; // U, V
+            NppiSize oFullDstPlaneSizeUV = { dstW, dstH };
+
+            st = nppiSet_8u_C2R(fillValUV,
+                                     out->data[plane],
+                                     out->linesize[plane],
+                                     oFullDstPlaneSizeUV);
+
+
+            if (st != NPP_SUCCESS) {
+                av_log(ctx, AV_LOG_ERROR,
+                       "nppiSet_8u_C2R plane=%d error=%d\n", plane,
+                       st);
+                return AVERROR_EXTERNAL;
+            }
+
+
+            if (srcW > 0 && srcH > 0) { // Only copy if there's source data for this plane
+                NppiSize oSrcROISizeBytesNV12UV = { srcW * 2, srcH }; // Width in bytes for C1R copy
+                Npp8u *pDstROIStart = out->data[plane] + (y_plane_offset * out->linesize[plane]) + (x_plane_offset * 2); // Byte offset
+
+                st = nppiCopy_8u_C1R(
+                    in->data[plane], in->linesize[plane],
+                    pDstROIStart, out->linesize[plane],
+                    oSrcROISizeBytesNV12UV);
+
+                if (st != NPP_SUCCESS) {
+                    av_log(ctx, AV_LOG_ERROR,
+                           "nppiCopy_8u_C1R plane=%d error=%d\n", plane,
+                           st);
+                    return AVERROR_EXTERNAL;
+                }
+            }
+        } else {
+            // Y plane (all formats) or U/V planes for YUV420P/YUV444P
             Npp8u fillVal = npp_pad_context->parsed_color[plane];
+            NppiSize oSrcSizeROI_C1 = { srcW, srcH };
+            NppiSize oDstSizeROI_C1 = { dstW, dstH };
 
             st = nppiCopyConstBorder_8u_C1R(
-                in->data[plane], in->linesize[plane], oSrcSizeROI,
-                out->data[plane], out->linesize[plane], oDstSizeROI, y_plane,
-                x_plane, fillVal);
+                in->data[plane], in->linesize[plane], oSrcSizeROI_C1,
+                out->data[plane], out->linesize[plane], oDstSizeROI_C1,
+                y_plane_offset, x_plane_offset, fillVal);
 
             if (st != NPP_SUCCESS) {
                 av_log(ctx, AV_LOG_ERROR,
@@ -426,23 +455,6 @@ static int npppad_pad(AVFilterContext* ctx, AVFrame* out, const AVFrame* in) {
                        st);
                 return AVERROR_EXTERNAL;
             }
-
-        } else if (nb_components == 4) {
-            /* RGBA 4-channel single plane */
-            st = nppiCopyConstBorder_8u_C4R(
-                in->data[0], in->linesize[0], oSrcSizeROI, out->data[0],
-                out->linesize[0], oDstSizeROI, y_plane, x_plane,
-                npp_pad_context->parsed_color);
-
-            if (st != NPP_SUCCESS) {
-                av_log(ctx, AV_LOG_ERROR,
-                       "nppiCopyConstBorder_8u_C4R error=%d\n", st);
-                return AVERROR_EXTERNAL;
-            }
-
-        } else {
-            av_log(ctx, AV_LOG_ERROR, "Unknown layout.\n");
-            return AVERROR(ENOSYS);
         }
     }
 
