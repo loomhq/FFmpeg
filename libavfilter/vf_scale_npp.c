@@ -727,6 +727,15 @@ static int nppscale_resize(AVFilterContext *ctx, NPPScaleStageContext *stage,
         int ow = stage->planes_out[i].width;
         int oh = stage->planes_out[i].height;
 
+        // If the output plane pointer is NULL, or if the output plane has zero dimensions
+        // (which might happen if the output format has fewer planes than the input ie YUVA420P -> YUV420P),
+        // skip processing for this plane.
+        if (!out->data[i] || ow == 0 || oh == 0) {
+            av_log(ctx, AV_LOG_DEBUG, "Skipping plane %d (iw=%d, ih=%d -> ow=%d, oh=%d). Output data pointer: %p.\n",
+                   i, iw, ih, ow, oh, out->data[i]);
+            continue; 
+        }
+
         err = nppiResizeSqrPixel_8u_C1R(in->data[i], (NppiSize){ iw, ih },
                                         in->linesize[i], (NppiRect){ 0, 0, iw, ih },
                                         out->data[i], out->linesize[i],
