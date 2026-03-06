@@ -69,6 +69,7 @@ typedef struct AACEncOptions {
     int pce;
     int mid_side;
     int intensity_stereo;
+    int remove_initial_padding;
 } AACEncOptions;
 
 /**
