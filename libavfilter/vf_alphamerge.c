@@ -83,7 +83,7 @@ static int do_alphamerge(FFFrameSync *fs)
         AVBufferRef *alpha_plane_buf = av_frame_get_plane_buffer(alpha_buf, Y);
 
         if (!alpha_plane_buf) {
-            av_log(ctx, AV_LOG_ERROR, "Cloud not get buffer for alpha plane\n");
+            av_log(ctx, AV_LOG_ERROR, "Could not get buffer for alpha plane\n");
             return AVERROR(EINVAL);
         }
 
