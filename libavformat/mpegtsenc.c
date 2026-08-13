@@ -1774,9 +1774,24 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
     ts_st->prev_payload_key = key;
 }
 
+static int is_h264_start_code_3bytes(const uint8_t* p)
+{
+    if (p[0] == 0x0 && p[1] == 0x00 && p[2] == 0x01) return 1;
+    return 0;
+}
+
+static int can_find_h264_start_code(const uint8_t* p, size_t size)
+{
+    for (int i = 0; i <= (size - 3); i++) {
+        int found = is_h264_start_code_3bytes(p + i);
+        if (found) return 1;
+    }
+    return 0;
+}
+
 static int check_h26x_startcode(AVFormatContext *s, const AVStream *st, const AVPacket *pkt, const char *codec)
 {
-    if (pkt->size < 5 || AV_RB32(pkt->data) != 0x0000001 && AV_RB24(pkt->data) != 0x000001) {
+    if (pkt->size < 5 || !can_find_h264_start_code(pkt->data, FFMIN(pkt->size, 10))) {
         if (!st->nb_frames) {
             av_log(s, AV_LOG_ERROR, "%s bitstream malformed, "
                    "no startcode found, use the video bitstream filter '%s_mp4toannexb' to fix it "
