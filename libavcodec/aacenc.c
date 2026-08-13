@@ -1162,7 +1162,7 @@ static av_cold int aac_encode_init(AVCodecContext *avctx)
     /* Constants */
     s->last_frame_pb_count = 0;
     avctx->frame_size = 1024;
-    avctx->initial_padding = 1024;
+    avctx->initial_padding = s->options.remove_initial_padding ? 0 : 1024;
     s->lambda = avctx->global_quality > 0 ? avctx->global_quality : 120;
 
     /* Channel map and unspecified bitrate guessing */
@@ -1284,6 +1284,7 @@ static const AVOption aacenc_options[] = {
     {"aac_pns", "Perceptual noise substitution", offsetof(AACEncContext, options.pns), AV_OPT_TYPE_BOOL, {.i64 = 1}, -1, 1, AACENC_FLAGS},
     {"aac_tns", "Temporal noise shaping", offsetof(AACEncContext, options.tns), AV_OPT_TYPE_BOOL, {.i64 = 1}, -1, 1, AACENC_FLAGS},
     {"aac_pce", "Forces the use of PCEs", offsetof(AACEncContext, options.pce), AV_OPT_TYPE_BOOL, {.i64 = 0}, -1, 1, AACENC_FLAGS},
+    {"remove_aac_initial_padding", "Set initial padding to 0 instead of 1024", offsetof(AACEncContext, options.remove_initial_padding), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, AACENC_FLAGS},
     FF_AAC_PROFILE_OPTS
     {NULL}
 };
