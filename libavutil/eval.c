@@ -41,7 +41,7 @@
 #include "avstring.h"
 #include "reverse.h"
 
-#define MAX_DEPTH 100
+#define MAX_DEPTH 700
 
 typedef struct Parser {
     const AVClass *class;
