@@ -26,6 +26,7 @@
  */
 
 #include "avfilter.h"
+#include <string.h>
 #include "formats.h"
 #include "libavutil/common.h"
 #include "libavutil/eval.h"
@@ -835,8 +836,13 @@ static int init_slice_fn(AVFilterContext *ctx)
         break;
     }
 
+    memset(s->blend_row, 0, sizeof(s->blend_row));
+
 #if ARCH_X86 && HAVE_X86ASM
     ff_overlay_init_x86(ctx);
+#elif ARCH_AARCH64
+    if (s->arm64_neon)
+        ff_overlay_init_aarch64(ctx);
 #endif
 
     return 0;
@@ -936,6 +942,7 @@ static const AVOption overlay_options[] = {
         { "unknown",       "", 0, AV_OPT_TYPE_CONST, {.i64=AVALPHA_MODE_UNSPECIFIED},   .flags = FLAGS, .unit = "alpha_mode" },
         { "straight",      "", 0, AV_OPT_TYPE_CONST, {.i64=AVALPHA_MODE_STRAIGHT},      .flags = FLAGS, .unit = "alpha_mode" },
         { "premultiplied", "", 0, AV_OPT_TYPE_CONST, {.i64=AVALPHA_MODE_PREMULTIPLIED}, .flags = FLAGS, .unit = "alpha_mode" },
+    { "arm64_neon", "enable AArch64 NEON overlay optimization", OFFSET(arm64_neon), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, FLAGS },
     { NULL }
 };
 

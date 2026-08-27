@@ -77,11 +77,14 @@ typedef struct OverlayContext {
 
     AVExpr *x_pexpr, *y_pexpr;
 
+    int arm64_neon;             ///< enable AArch64 NEON row kernels
+
     int (*blend_row[4])(uint8_t *d, uint8_t *da, uint8_t *s, uint8_t *a, int w,
                         ptrdiff_t alinesize);
     int (*blend_slice)(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs);
 } OverlayContext;
 
 void ff_overlay_init_x86(AVFilterContext *ctx);
+void ff_overlay_init_aarch64(AVFilterContext *ctx);
 
 #endif /* AVFILTER_OVERLAY_H */
