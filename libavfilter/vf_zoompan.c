@@ -32,7 +32,7 @@
 /* This filter builds each output pixel by interpolating (blending) nearby
  * source pixels. A "tap" is one such source pixel and its weight; more taps
  * blend a wider area, which gives a smoother result. 
- * These values are opninionated and meant to get a good balance of quality and perf */
+ * These values are opinionated and meant to get a good balance of quality and perf */
 #define BASE_TAPS  4    /* kernel taps at 1:1 and when upscaling */
 #define MAX_TAPS   32   /* cap on the widened kernel used when reducing */
 #define COEF_BITS  14   /* fixed point precision of the tap weights */
